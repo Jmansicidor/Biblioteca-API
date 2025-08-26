@@ -1,7 +1,7 @@
-﻿using AutoMapper;
-using BibliotecaApi.Datos;
+﻿using BibliotecaApi.Datos;
 using BibliotecaApi.DTOs;
 using BibliotecaApi.Entitys;
+using MapsterMapper;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -12,11 +12,13 @@ namespace BibliotecaApi.Controllers
 	public class AutorController : ControllerBase
 	{
 		private readonly ApplicationDbContext context;
-		
-		public AutorController(ApplicationDbContext context)
+		private readonly IMapper mapper;
+
+		public AutorController(ApplicationDbContext context, IMapper mapper)
 		{
 			this.context = context;
-			
+			this.mapper = mapper;
+
 
 		}
 
@@ -24,59 +26,56 @@ namespace BibliotecaApi.Controllers
 		[HttpGet]
 		public async Task<ActionResult<IEnumerable<AutorResponse>>> Get()
 		{
-			var response = await context.Autores
-										.Select(a => a.ToDto())
-										.ToListAsync();
-
-			return Ok(response);
+			var autores = await context.Autores.Include(a => a.Libros).ToListAsync();
+			return Ok(mapper.Map<List<AutorResponse>>(autores));
 		}
 
 
 		[HttpGet("{id:int}",Name = "ObtenerAutor")]
 		public async Task<ActionResult<AutorResponse>> GetById(int id)
 		{
-			var autor = await context.Autores.FirstOrDefaultAsync(x => x.Id == id);
+			var autor = await context.Autores.Include(a => a.Libros).FirstOrDefaultAsync(a => a.Id == id);
+			if (autor is null) return NotFound();
 
-			if (autor is null)
-				return NotFound();
-
-			return Ok(autor.ToDto());
+			return Ok(mapper.Map<AutorResponse>(autor));
 
 		}
 
 		[HttpPost]
-		public async Task<ActionResult> Post(Autor autor)
+		public async Task<ActionResult<AutorCreate>> Post(AutorCreate request)
 		{
-			context.Add(autor);
-			await context.SaveChangesAsync();
-			return CreatedAtRoute("ObtenerAutor", new {id = autor.Id }, autor);
+			var autor = mapper.Map<Autor>(request);
 
+			context.Autores.Add(autor);
+			await context.SaveChangesAsync();
+			var response = mapper.Map<AutorCreate>(autor);
+
+			return CreatedAtRoute("ObtenerAutor", new { id = autor.Id }, response);
 		}
 
 		[HttpPut("{id:int}")]
 		public async Task<ActionResult> Put(int id, AutorUpdate request)
 		{
 			var autor = await context.Autores.FirstOrDefaultAsync(a => a.Id == id);
+			if (autor is null) return NotFound();
 
-			if (id != autor.Id)
-				return BadRequest("Autor no encontrado para actualizar");
+			mapper.Map(request, autor); // Mapster actualiza propiedades
 
-			autor.UpdateEntity(request);
 			await context.SaveChangesAsync();
 			return Ok();
-
 		}
+
+		
 
 		[HttpDelete("{id:int}")]
 		public async Task<ActionResult> Delete(int id)
 		{
-			var AutoresDelete = await context.Autores.Where(x => x.Id == id).ExecuteDeleteAsync();
+			var autor = await context.Autores.FirstOrDefaultAsync(a => a.Id == id);
+			if (autor is null) return NotFound();
 
-			if (AutoresDelete == 0)
-				return NotFound();
-
-			return NoContent(); ;
-
+			context.Autores.Remove(autor);
+			await context.SaveChangesAsync();
+			return NoContent();
 		}
 
 	}

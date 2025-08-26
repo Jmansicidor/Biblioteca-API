@@ -1,9 +1,8 @@
-﻿using Azure.Core;
-using BibliotecaApi.Datos;
+﻿
 using BibliotecaApi.Datos;
 using BibliotecaApi.DTOs;
 using BibliotecaApi.Entitys;
-using Microsoft.AspNetCore.Mvc;
+using MapsterMapper;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -16,49 +15,48 @@ namespace BibliotecaApi.Controllers
 	{
 
 		private readonly ApplicationDbContext context;
-		public LibroController(ApplicationDbContext context)
+		private readonly IMapper mapper;
+		public LibroController(ApplicationDbContext context, IMapper mapper)
 		{
 			this.context = context;
-
+			this.mapper = mapper;
 		}
 
 
 		[HttpGet]
 		public async Task<ActionResult<IEnumerable<LibroResponse>>> Get()
 		{
-			var response = await context.Libros.AsNoTracking().ToListAsync();
-
-			return Ok(response.Select(l => l.ToDTO()));
+			var libros = await context.Libros.ToListAsync();
+			return Ok(mapper.Map<List<LibroResponse>>(libros));
 		}
 
 		[HttpGet("{id:int}", Name = "ObtenerLibro")]
 		public async Task<ActionResult<LibroDetailResponse>> Get(int id)
 		{
-			var libros = await context.Libros.Include(l => l.Autor).AsNoTracking().FirstOrDefaultAsync(x => x.Id == id);
+			var libro = await context.Libros.Include(l => l.Autor).AsNoTracking().FirstOrDefaultAsync(x => x.Id == id);
 
-			if (libros is null)
+			if (libro is null)
 				return NotFound();
 
-			return Ok(value: libros.ToDetailDto());
+			return Ok(mapper.Map<LibroDetailResponse>(libro));
 		}
 
 
 		[HttpPost]
-		public async Task<ActionResult<LibroDetailResponse>> Post(LibroCreate libro)
+		public async Task<ActionResult<LibroDetailResponse>> Post(LibroCreate request)
 		{
-			var existeAutor = await context.Autores.AnyAsync(x => x.Id == libro.AutorId);
+			var existeAutor = await context.Autores.AnyAsync(a => a.Id == request.AutorId);
+			if (!existeAutor) return BadRequest($"No existe el autor con id {request.AutorId}");
 
-			if (!existeAutor) return BadRequest($"El auto de id{libro.AutorId} no existe");
+			var libro = mapper.Map<Libro>(request);
 
-			var request = libro.ToEntity();
-			context.Add(request);
+			context.Libros.Add(libro);
 			await context.SaveChangesAsync();
-			// Recuperamos con autor incluido para la respuesta detallada
-			var libroCreado = await context.Libros
-												.Include(l => l.Autor)
-												.FirstAsync(l => l.Id == request.Id);
 
-			return CreatedAtRoute("ObtenerLibro", new { id = libroCreado.Id }, libroCreado.ToDetailDto());
+			// Recargar con autor incluido
+			var libroCreado = await context.Libros.Include(l => l.Autor).FirstAsync(l => l.Id == libro.Id);
+
+			return CreatedAtRoute("ObtenerLibro", new { id = libroCreado.Id }, mapper.Map<LibroDetailResponse>(libroCreado));
 		}
 
 		[HttpPut("{id:int}")]
@@ -72,8 +70,10 @@ namespace BibliotecaApi.Controllers
 			if (!existeAutor)
 				return BadRequest($"El autor con id {request.AutorId} no existe");
 
+			mapper.Map(request, libro);
+
 			// Actualizamos los datos
-			libro.UpdateEntity(request);
+		
 
 			await context.SaveChangesAsync();
 

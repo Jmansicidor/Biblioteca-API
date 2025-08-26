@@ -1,10 +1,9 @@
 
 using BibliotecaApi.Datos;
+using BibliotecaApi.Utilidades;
+using Mapster;
+using MapsterMapper;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
-using System.Reflection;
-using System.Text.Json.Serialization;
-
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -15,6 +14,15 @@ var builder = WebApplication.CreateBuilder(args);
 
 
 builder.Services.AddControllers();
+
+
+var config = TypeAdapterConfig.GlobalSettings;
+MappingConfig.RegisterMappings(config);
+builder.Services.AddSingleton(config);
+builder.Services.AddScoped<IMapper, ServiceMapper>();
+
+
+
 builder.Services.AddDbContext<ApplicationDbContext>(opciones => 
 opciones.UseSqlServer("name=DefaultConnection"));
 
