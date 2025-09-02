@@ -2,6 +2,7 @@
 using BibliotecaApi.Datos;
 using BibliotecaApi.DTOs;
 using BibliotecaApi.Entitys;
+using Mapster;
 using MapsterMapper;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -30,55 +31,97 @@ namespace BibliotecaApi.Controllers
 			return Ok(mapper.Map<List<LibroResponse>>(libros));
 		}
 
-		[HttpGet("{id:int}", Name = "ObtenerLibro")]
-		public async Task<ActionResult<LibroDetailResponse>> Get(int id)
+
+		[HttpGet("{id:int}")]
+		public async Task<ActionResult<LibroDetailResponse>> GetLibroById(int id)
 		{
-			var libro = await context.Libros.Include(l => l.Autor).AsNoTracking().FirstOrDefaultAsync(x => x.Id == id);
+			var libro = await context.Libros
+				.Include(l => l.Autores)
+				.ThenInclude(al => al.Autor)
+				.FirstOrDefaultAsync(l => l.Id == id);
 
 			if (libro is null)
+			{
 				return NotFound();
+			}
 
-			return Ok(mapper.Map<LibroDetailResponse>(libro));
+			return libro.Adapt<LibroDetailResponse>();
 		}
 
 
-		[HttpPost]
-		public async Task<ActionResult<LibroDetailResponse>> Post(LibroCreate request)
-		{
-			var existeAutor = await context.Autores.AnyAsync(a => a.Id == request.AutorId);
-			if (!existeAutor) return BadRequest($"No existe el autor con id {request.AutorId}");
 
-			var libro = mapper.Map<Libro>(request);
+		[HttpPost]
+		public async Task<ActionResult<LibroDetailResponse>> Post(LibroCreate libroCreateDto)
+		{
+			// Validar que existan los autores en la BD
+			var autoresExistentes = await context.Autores
+				.Where(a => libroCreateDto.AutoresIds.Contains(a.Id))
+				.ToListAsync();
+
+			if (autoresExistentes.Count != libroCreateDto.AutoresIds.Count)
+			{
+				return BadRequest("Uno o más autores no existen en la base de datos.");
+			}
+
+			// Crear la entidad libro
+			var libro = new Libro
+			{
+				Titulo = libroCreateDto.Titulo,
+				Description = libroCreateDto.Description,
+				Autores = libroCreateDto.AutoresIds
+					.Select(id => new AutorLibro { AutorId = id })
+					.ToList()
+			};
 
 			context.Libros.Add(libro);
 			await context.SaveChangesAsync();
 
-			// Recargar con autor incluido
-			var libroCreado = await context.Libros.Include(l => l.Autor).FirstAsync(l => l.Id == libro.Id);
+			// Mapear la respuesta
+			var response = libro.Adapt<LibroDetailResponse>();
 
-			return CreatedAtRoute("ObtenerLibro", new { id = libroCreado.Id }, mapper.Map<LibroDetailResponse>(libroCreado));
+			return CreatedAtAction(nameof(GetLibroById), new { id = libro.Id }, response);
 		}
+
 
 		[HttpPut("{id:int}")]
-		public async Task<ActionResult> Put(int id, LibroUpdate request)
+		public async Task<ActionResult> Put(int id, LibroUpdate libroUpdate)
 		{
-			var libro = await context.Libros.FirstOrDefaultAsync(l => l.Id == id);
-			if (libro is null)
+			var autoresExistentes = await context.Autores
+				.Where(a => libroUpdate.AutoresIds.Contains(a.Id))
+				.ToListAsync();
+
+			if (autoresExistentes.Count != libroUpdate.AutoresIds.Count)
+			{
+				return BadRequest("Uno o más autores no existen en la base de datos.");
+			}
+
+			var libroDB = await context.Libros
+				.Include(l => l.Autores)
+				.FirstOrDefaultAsync(l => l.Id == id);
+
+			if (libroDB is null)
 				return NotFound();
 
-			var existeAutor = await context.Autores.AnyAsync(x => x.Id == request.AutorId);
-			if (!existeAutor)
-				return BadRequest($"El autor con id {request.AutorId} no existe");
+			// Actualizar campos simples
+			libroDB.Titulo = libroUpdate.Titulo;
+			libroDB.Description = libroUpdate.Description;
 
-			mapper.Map(request, libro);
+			// Actualizar autores
+			libroDB.Autores.Clear();
 
-			// Actualizamos los datos
-		
+			foreach (var autorId in libroUpdate.AutoresIds)
+			{
+				libroDB.Autores.Add(new AutorLibro
+				{
+					AutorId = autorId
+					// EF setea LibroId automáticamente
+				});
+			}
 
 			await context.SaveChangesAsync();
-
-			return Ok(); // 204
+			return NoContent();
 		}
+
 
 		[HttpDelete("{id:int}")]
 		public async Task<ActionResult> Delete(int id) {

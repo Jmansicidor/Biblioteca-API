@@ -1,10 +1,6 @@
 ﻿namespace BibliotecaApi.DTOs
 {
-	public sealed record LibroDTO(
-		 string Titulo,
-		 string Description,
-		 int AutorId
-		);
+	
 
 	public sealed record LibroResponse(
 		int Id,
@@ -16,23 +12,22 @@
 		int Id,
 		string Titulo,
 		string Description,
-		int AutorId
+		List<int> AutoresIds
 	);
 
 	public sealed record LibroUpdate(
-		
+
+		int Id,
 		string Titulo,
 		string Description,
-		int AutorId
+		List<int> AutoresIds
 	);
 
 	public sealed record LibroDetailResponse(
 		int Id,
 		string Titulo,
-		string Description,
-		int AutorId,
-		string AutorNombreCompleto
+		string? Description,
+		List<AutorResponse> Autores
 	);
-
 
 }

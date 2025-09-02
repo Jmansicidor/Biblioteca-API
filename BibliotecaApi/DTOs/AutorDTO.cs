@@ -3,25 +3,28 @@
 
 
 	public sealed record AutorResponse(
-		int id,
+		int Id,
 		string NombreCompleto,
-		List<LibroResponse> Libros
+		string Autentifacion
 		);
 
 	public sealed record AutorCreate(
 		string Name,
-		string SurName
+		string SurName,
+		string Autentifacion
 	);
 
 	public sealed record AutorUpdate(
 		string Name,
-		string SurName
+		string SurName,
+		string Autentifacion
 	);
 
 
 	public sealed record AutorDelete(
 		int Id,
 		string Name,
-		string SurName
+		string SurName,
+		string Autentifacion
 		);
 }

@@ -1,7 +1,9 @@
-﻿using BibliotecaApi.Datos;
+﻿using Azure;
+using BibliotecaApi.Datos;
 using BibliotecaApi.DTOs;
 using BibliotecaApi.Entitys;
 using MapsterMapper;
+using Microsoft.AspNetCore.JsonPatch;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -18,7 +20,6 @@ namespace BibliotecaApi.Controllers
 		{
 			this.context = context;
 			this.mapper = mapper;
-
 
 		}
 
@@ -62,10 +63,34 @@ namespace BibliotecaApi.Controllers
 			mapper.Map(request, autor); // Mapster actualiza propiedades
 
 			await context.SaveChangesAsync();
-			return Ok();
+			return NoContent();
 		}
 
-		
+		[HttpPatch("{id:int}")]
+
+		public async Task<ActionResult> Patch(int id, JsonPatchDocument<AutorPatchDTO> request)
+		{
+			var autor = await context.Autores.FirstOrDefaultAsync(a => a.Id == id);
+			if (autor is null) return NotFound();
+
+			var autorPatch = mapper.Map<AutorPatchDTO>(autor);
+			
+			request.ApplyTo(autorPatch, ModelState);
+
+			var isValid = TryValidateModel(autorPatch);
+
+			if (!isValid) return ValidationProblem(ModelState);
+
+			mapper.Map(autorPatch, autor);
+
+			// Mapster actualiza propiedades
+			await context.SaveChangesAsync();
+
+
+			return NoContent();
+		}
+
+
 
 		[HttpDelete("{id:int}")]
 		public async Task<ActionResult> Delete(int id)

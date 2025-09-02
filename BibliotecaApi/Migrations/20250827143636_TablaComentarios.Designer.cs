@@ -4,6 +4,7 @@ using BibliotecaApi.Datos;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace BibliotecaApi.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250827143636_TablaComentarios")]
+    partial class TablaComentarios
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -30,9 +33,6 @@ namespace BibliotecaApi.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<string>("Autentificacion")
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(150)
@@ -48,22 +48,7 @@ namespace BibliotecaApi.Migrations
                     b.ToTable("Autores");
                 });
 
-            modelBuilder.Entity("BibliotecaApi.Entitys.AutorLibro", b =>
-                {
-                    b.Property<int>("AutorId")
-                        .HasColumnType("int");
-
-                    b.Property<int>("LibroId")
-                        .HasColumnType("int");
-
-                    b.HasKey("AutorId", "LibroId");
-
-                    b.HasIndex("LibroId");
-
-                    b.ToTable("AutorLibros");
-                });
-
-            modelBuilder.Entity("BibliotecaApi.Entitys.Comentario", b =>
+            modelBuilder.Entity("BibliotecaApi.Entitys.Comentarios", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -94,6 +79,9 @@ namespace BibliotecaApi.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<int>("AutorId")
+                        .HasColumnType("int");
+
                     b.Property<string>("Description")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
@@ -104,29 +92,12 @@ namespace BibliotecaApi.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("AutorId");
+
                     b.ToTable("Libros");
                 });
 
-            modelBuilder.Entity("BibliotecaApi.Entitys.AutorLibro", b =>
-                {
-                    b.HasOne("BibliotecaApi.Entitys.Autor", "Autor")
-                        .WithMany("Libros")
-                        .HasForeignKey("AutorId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("BibliotecaApi.Entitys.Libro", "Libro")
-                        .WithMany("Autores")
-                        .HasForeignKey("LibroId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Autor");
-
-                    b.Navigation("Libro");
-                });
-
-            modelBuilder.Entity("BibliotecaApi.Entitys.Comentario", b =>
+            modelBuilder.Entity("BibliotecaApi.Entitys.Comentarios", b =>
                 {
                     b.HasOne("BibliotecaApi.Entitys.Libro", "Libro")
                         .WithMany("Comentarios")
@@ -137,6 +108,17 @@ namespace BibliotecaApi.Migrations
                     b.Navigation("Libro");
                 });
 
+            modelBuilder.Entity("BibliotecaApi.Entitys.Libro", b =>
+                {
+                    b.HasOne("BibliotecaApi.Entitys.Autor", "Autor")
+                        .WithMany("Libros")
+                        .HasForeignKey("AutorId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Autor");
+                });
+
             modelBuilder.Entity("BibliotecaApi.Entitys.Autor", b =>
                 {
                     b.Navigation("Libros");
@@ -144,8 +126,6 @@ namespace BibliotecaApi.Migrations
 
             modelBuilder.Entity("BibliotecaApi.Entitys.Libro", b =>
                 {
-                    b.Navigation("Autores");
-
                     b.Navigation("Comentarios");
                 });
 #pragma warning restore 612, 618

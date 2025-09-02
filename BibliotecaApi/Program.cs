@@ -21,6 +21,9 @@ MappingConfig.RegisterMappings(config);
 builder.Services.AddSingleton(config);
 builder.Services.AddScoped<IMapper, ServiceMapper>();
 
+//Patch
+
+builder.Services.AddControllers().AddNewtonsoftJson();
 
 
 builder.Services.AddDbContext<ApplicationDbContext>(opciones => 
