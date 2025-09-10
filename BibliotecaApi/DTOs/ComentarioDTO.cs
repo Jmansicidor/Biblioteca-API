@@ -6,7 +6,9 @@
 		public sealed record ComentarioResponse(
 			Guid Id,
 			string Content,
-			DateTime DatePost			
+			DateTime DatePost,
+			string UsuarioId,
+			string UsuarioEmail
 		);
 
 		public sealed record ComentarioCreate(
@@ -18,7 +20,9 @@
 		public sealed record ComentarioUpdate(
 			Guid Id,
 			string Content,
-			DateTime DatePost
+			DateTime DatePost,
+			string UsuarioId,
+			string UsuarioEmail
 		);
 
 		

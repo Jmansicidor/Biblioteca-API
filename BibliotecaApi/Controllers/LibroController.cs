@@ -4,6 +4,7 @@ using BibliotecaApi.DTOs;
 using BibliotecaApi.Entitys;
 using Mapster;
 using MapsterMapper;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -12,6 +13,7 @@ namespace BibliotecaApi.Controllers
 {
 	[ApiController]
 	[Route("api/libros")]
+	[Authorize]
 	public class LibroController : Controller
 	{
 

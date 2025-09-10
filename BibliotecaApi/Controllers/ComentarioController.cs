@@ -2,6 +2,7 @@
 using BibliotecaApi.DTOs;
 using BibliotecaApi.Entitys;
 using MapsterMapper;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.JsonPatch;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -13,6 +14,7 @@ namespace BibliotecaApi.Controllers
 {
 	[Route("api/libros/{libroId:int}/comentarios")]
 	[ApiController]
+	[Authorize]
 	public class ComentarioController : ControllerBase
 	{
 		private readonly ApplicationDbContext context;
@@ -33,7 +35,7 @@ namespace BibliotecaApi.Controllers
 			var existeLibro = await context.Libros.AnyAsync(l => l.Id == libroId);
 			if (!existeLibro) return NotFound();
 
-			var cometarios = await context.Comentarios.Where(l => l.LibroId == libroId)
+			var cometarios = await context.Comentarios.Include(x => x.Usuario).Where(l => l.LibroId == libroId)
 							.OrderByDescending(x => x.DatePost).ToListAsync();
 			return Ok(mapper.Map<List<ComentarioResponse>>(cometarios));
 		}
@@ -42,7 +44,7 @@ namespace BibliotecaApi.Controllers
 		[HttpGet("{id}")]
 		public async Task<ActionResult<ComentarioResponse>> GetById(Guid id)
 		{
-			var comentario = await context.Comentarios.FirstOrDefaultAsync(x => x.Id == id);
+			var comentario = await context.Comentarios.Include(x => x.Usuario).FirstOrDefaultAsync(x => x.Id == id);
 
 			if (comentario is null) return NotFound();
 

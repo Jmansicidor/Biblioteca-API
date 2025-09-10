@@ -3,6 +3,7 @@ using BibliotecaApi.Datos;
 using BibliotecaApi.DTOs;
 using BibliotecaApi.Entitys;
 using MapsterMapper;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.JsonPatch;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -11,6 +12,7 @@ namespace BibliotecaApi.Controllers
 {
 	[ApiController]
 	[Route("api/autores")]
+	[Authorize]
 	public class AutorController : ControllerBase
 	{
 		private readonly ApplicationDbContext context;
