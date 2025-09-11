@@ -1,6 +1,7 @@
 ﻿using Azure;
 using BibliotecaApi.Datos;
 using BibliotecaApi.DTOs;
+using BibliotecaApi.DTOs.BibliotecaAPI.DTOs;
 using BibliotecaApi.Entitys;
 using MapsterMapper;
 using Microsoft.AspNetCore.Authorization;
@@ -12,98 +13,111 @@ namespace BibliotecaApi.Controllers
 {
 	[ApiController]
 	[Route("api/autores")]
-	[Authorize]
-	public class AutorController : ControllerBase
+	[Authorize(Policy = "esadmin")]
+	public class AutoresController : ControllerBase
 	{
 		private readonly ApplicationDbContext context;
 		private readonly IMapper mapper;
 
-		public AutorController(ApplicationDbContext context, IMapper mapper)
+		public AutoresController(ApplicationDbContext context, IMapper mapper)
 		{
 			this.context = context;
 			this.mapper = mapper;
-
 		}
 
-
-		[HttpGet]
-		public async Task<ActionResult<IEnumerable<AutorResponse>>> Get()
+		[HttpGet] // api/autores
+		[AllowAnonymous]
+		public async Task<IEnumerable<AutorDTO>> Get()
 		{
-			var autores = await context.Autores.Include(a => a.Libros).ToListAsync();
-			return Ok(mapper.Map<List<AutorResponse>>(autores));
+			var autores = await context.Autores.ToListAsync();
+			var autoresDTO = mapper.Map<IEnumerable<AutorDTO>>(autores);
+			return autoresDTO;
 		}
 
 
-		[HttpGet("{id:int}",Name = "ObtenerAutor")]
-		public async Task<ActionResult<AutorResponse>> GetById(int id)
+		[HttpGet("{id:int}", Name = "ObtenerAutor")] // api/autores/id
+		public async Task<ActionResult<AutorConLibrosDTO>> Get(int id)
 		{
-			var autor = await context.Autores.Include(a => a.Libros).FirstOrDefaultAsync(a => a.Id == id);
-			if (autor is null) return NotFound();
+			var autor = await context.Autores
+				.Include(x => x.Libros)
+					.ThenInclude(x => x.Libro)
+				.FirstOrDefaultAsync(x => x.Id == id);
 
-			return Ok(mapper.Map<AutorResponse>(autor));
+			if (autor is null)
+			{
+				return NotFound();
+			}
 
+			var autorDTO = mapper.Map<AutorConLibrosDTO>(autor);
+
+			return autorDTO;
 		}
+
 
 		[HttpPost]
-		public async Task<ActionResult<AutorCreate>> Post(AutorCreate request)
+		public async Task<ActionResult> Post(AutorCreacionDTO autorCreacionDTO)
 		{
-			var autor = mapper.Map<Autor>(request);
-
-			context.Autores.Add(autor);
+			var autor = mapper.Map<Autor>(autorCreacionDTO);
+			context.Add(autor);
 			await context.SaveChangesAsync();
-			var response = mapper.Map<AutorCreate>(autor);
-
-			return CreatedAtRoute("ObtenerAutor", new { id = autor.Id }, response);
+			var autorDTO = mapper.Map<AutorDTO>(autor);
+			return CreatedAtRoute("ObtenerAutor", new { id = autor.Id }, autorDTO);
 		}
 
-		[HttpPut("{id:int}")]
-		public async Task<ActionResult> Put(int id, AutorUpdate request)
+		[HttpPut("{id:int}")] // api/autores/id
+		public async Task<ActionResult> Put(int id, AutorCreacionDTO autorCreacionDTO)
 		{
-			var autor = await context.Autores.FirstOrDefaultAsync(a => a.Id == id);
-			if (autor is null) return NotFound();
-
-			mapper.Map(request, autor); // Mapster actualiza propiedades
-
+			var autor = mapper.Map<Autor>(autorCreacionDTO);
+			autor.Id = id;
+			context.Update(autor);
 			await context.SaveChangesAsync();
 			return NoContent();
 		}
 
 		[HttpPatch("{id:int}")]
-
-		public async Task<ActionResult> Patch(int id, JsonPatchDocument<AutorPatchDTO> request)
+		public async Task<ActionResult> Patch(int id, JsonPatchDocument<AutorPatchDTO> patchDoc)
 		{
-			var autor = await context.Autores.FirstOrDefaultAsync(a => a.Id == id);
-			if (autor is null) return NotFound();
+			if (patchDoc is null)
+			{
+				return BadRequest();
+			}
 
-			var autorPatch = mapper.Map<AutorPatchDTO>(autor);
-			
-			request.ApplyTo(autorPatch, ModelState);
+			var autorDB = await context.Autores.FirstOrDefaultAsync(x => x.Id == id);
 
-			var isValid = TryValidateModel(autorPatch);
+			if (autorDB is null)
+			{
+				return NotFound();
+			}
 
-			if (!isValid) return ValidationProblem(ModelState);
+			var autorPatchDTO = mapper.Map<AutorPatchDTO>(autorDB);
 
-			mapper.Map(autorPatch, autor);
+			patchDoc.ApplyTo(autorPatchDTO, ModelState);
 
-			// Mapster actualiza propiedades
+			var esValido = TryValidateModel(autorPatchDTO);
+
+			if (!esValido)
+			{
+				return ValidationProblem();
+			}
+
+			mapper.Map(autorPatchDTO, autorDB);
+
 			await context.SaveChangesAsync();
-
 
 			return NoContent();
 		}
-
-
 
 		[HttpDelete("{id:int}")]
 		public async Task<ActionResult> Delete(int id)
 		{
-			var autor = await context.Autores.FirstOrDefaultAsync(a => a.Id == id);
-			if (autor is null) return NotFound();
+			var registrosBorrados = await context.Autores.Where(x => x.Id == id).ExecuteDeleteAsync();
 
-			context.Autores.Remove(autor);
-			await context.SaveChangesAsync();
+			if (registrosBorrados == 0)
+			{
+				return NotFound();
+			}
+
 			return NoContent();
 		}
-
 	}
 }

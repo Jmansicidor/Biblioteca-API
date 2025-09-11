@@ -1,6 +1,9 @@
 
 using BibliotecaApi.Datos;
-using BibliotecaApi.Utilidades;
+using BibliotecaApi.Entitys;
+using BibliotecaApi.Servicios;
+
+using BibliotecaAPI.Utilidades;
 using Mapster;
 using MapsterMapper;
 using Microsoft.AspNetCore.Identity;
@@ -10,15 +13,24 @@ var builder = WebApplication.CreateBuilder(args);
 
 //Area servicios
 
+builder.Services.AddCors(opciones =>
+{
+	opciones.AddDefaultPolicy(opcionesCORS =>
+	{
+		opcionesCORS.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader();
+	});
+});
 
-
-builder.Services.AddIdentityCore<IdentityUser>()
+builder.Services.AddIdentityCore<Usuario>()
 	.AddRoles<IdentityRole>()
 	.AddEntityFrameworkStores<ApplicationDbContext>().AddDefaultTokenProviders();
 
-//builder.Services.AddScoped<IUserClaimsPrincipalFactory<IdentityUser>, UserClaimsPrincipalFactory<IdentityUser, IdentityRole>>();
-builder.Services.AddScoped<UserManager<IdentityUser>>();
-builder.Services.AddScoped<SignInManager<IdentityUser>>();
+builder.Services.AddScoped<UserManager<Usuario>>();
+builder.Services.AddScoped<SignInManager<Usuario>>();
+
+//Inyeccion de dependencias
+builder.Services.AddTransient<IServiciosUsuarios, ServiciosUsuarios>();
+
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddAuthentication().AddJwtBearer(opciones => { 
 	opciones.MapInboundClaims = false;
@@ -33,6 +45,11 @@ builder.Services.AddAuthentication().AddJwtBearer(opciones => {
 			System.Text.Encoding.UTF8.GetBytes(builder.Configuration["Jwtkey"]!)),
 		ClockSkew = TimeSpan.Zero
 	};
+});
+
+builder.Services.AddAuthorization(opciones =>
+{
+	opciones.AddPolicy("esadmin", politica => politica.RequireClaim("esadmin"));
 });
 
 
@@ -56,6 +73,7 @@ var app = builder.Build();
 
 
 //Area middleware
+app.UseCors();
 
 app.MapControllers();
 

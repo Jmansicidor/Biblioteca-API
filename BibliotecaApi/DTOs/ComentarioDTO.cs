@@ -1,33 +1,13 @@
 ﻿namespace BibliotecaApi.DTOs
 {
-	public class ComentarioDTO
+
+    public class ComentarioDTO
 	{
-
-		public sealed record ComentarioResponse(
-			Guid Id,
-			string Content,
-			DateTime DatePost,
-			string UsuarioId,
-			string UsuarioEmail
-		);
-
-		public sealed record ComentarioCreate(
-			Guid Id,
-			string Content,
-			DateTime DatePost
-		);
-
-		public sealed record ComentarioUpdate(
-			Guid Id,
-			string Content,
-			DateTime DatePost,
-			string UsuarioId,
-			string UsuarioEmail
-		);
-
-		
-
-
-
+		public Guid Id { get; set; }
+		public required string Cuerpo { get; set; }
+		public DateTime FechaPublicacion { get; set; }
+		public required string UsuarioId { get; set; }
+		public required string UsuarioEmail { get; set; }
 	}
 }
+

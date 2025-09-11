@@ -12,7 +12,7 @@ namespace BibliotecaApi.Entitys
 
 		public required string UsuarioId { get; set; }
 
-		public IdentityUser? Usuario { get; set; }
+		public Usuario? Usuario { get; set; }
 
 	}
 }

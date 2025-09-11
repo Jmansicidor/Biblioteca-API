@@ -1,8 +1,10 @@
 ﻿using BibliotecaApi.Datos;
 using BibliotecaApi.DTOs;
 using BibliotecaApi.Entitys;
+using BibliotecaApi.Servicios;
 using MapsterMapper;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.JsonPatch;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -12,102 +14,170 @@ using static BibliotecaApi.DTOs.ComentarioDTO;
 
 namespace BibliotecaApi.Controllers
 {
-	[Route("api/libros/{libroId:int}/comentarios")]
 	[ApiController]
+	[Route("api/libros/{libroId:int}/comentarios")]
 	[Authorize]
-	public class ComentarioController : ControllerBase
+	public class ComentariosController : ControllerBase
 	{
 		private readonly ApplicationDbContext context;
 		private readonly IMapper mapper;
+		private readonly IServiciosUsuarios serviciosUsuarios;
 
-		public ComentarioController(ApplicationDbContext context, IMapper mapper)
+		public ComentariosController(ApplicationDbContext context, IMapper mapper,
+			IServiciosUsuarios serviciosUsuarios)
 		{
 			this.context = context;
 			this.mapper = mapper;
+			this.serviciosUsuarios = serviciosUsuarios;
 		}
 
-
-
-			// GET: api/<ComentarioController>
 		[HttpGet]
-		public async Task<ActionResult<List<ComentarioResponse>>> Get(int libroId)
+		public async Task<ActionResult<List<ComentarioDTO>>> Get(int libroId)
 		{
-			var existeLibro = await context.Libros.AnyAsync(l => l.Id == libroId);
-			if (!existeLibro) return NotFound();
+			var existeLibro = await context.Libros.AnyAsync(x => x.Id == libroId);
 
-			var cometarios = await context.Comentarios.Include(x => x.Usuario).Where(l => l.LibroId == libroId)
-							.OrderByDescending(x => x.DatePost).ToListAsync();
-			return Ok(mapper.Map<List<ComentarioResponse>>(cometarios));
+			if (!existeLibro)
+			{
+				return NotFound();
+			}
+
+			var comentarios = await context.Comentarios
+				.Include(x => x.Usuario)
+				.Where(x => x.LibroId == libroId)
+				.OrderByDescending(x => x.DatePost)
+				.ToListAsync();
+
+			return mapper.Map<List<ComentarioDTO>>(comentarios);
 		}
 
-		// GET api/<ComentarioController>/5
-		[HttpGet("{id}")]
-		public async Task<ActionResult<ComentarioResponse>> GetById(Guid id)
+		[HttpGet("{id}", Name = "ObtenerComentario")]
+		public async Task<ActionResult<ComentarioDTO>> Get(Guid id)
 		{
-			var comentario = await context.Comentarios.Include(x => x.Usuario).FirstOrDefaultAsync(x => x.Id == id);
+			var comentario = await context.Comentarios
+									.Include(x => x.Usuario)
+									.FirstOrDefaultAsync(x => x.Id == id);
 
-			if (comentario is null) return NotFound();
+			if (comentario is null)
+			{
+				return NotFound();
+			}
 
-			return Ok(mapper.Map<ComentarioResponse>(comentario));
+			return mapper.Map<ComentarioDTO>(comentario);
 		}
 
-		// POST api/<ComentarioController>
 		[HttpPost]
-		public async Task<ActionResult> Post(int libroId, ComentarioUpdate comentarioUpdate)
+		public async Task<ActionResult> Post(int libroId, ComentarioCreacionDTO comentarioCreacionDTO)
 		{
-			var existeLibro = await context.Libros.AnyAsync(l => l.Id == libroId);
-			if (!existeLibro) return NotFound();
-			var comentario = mapper.Map<Comentario>(comentarioUpdate);
+			var existeLibro = await context.Libros.AnyAsync(x => x.Id == libroId);
+
+			if (!existeLibro)
+			{
+				return NotFound();
+			}
+
+			var usuario = await serviciosUsuarios.ObtenerUsuario();
+
+			if (usuario is null)
+			{
+				return NotFound();
+			}
+
+			var comentario = mapper.Map<Comentario>(comentarioCreacionDTO);
 			comentario.LibroId = libroId;
 			comentario.DatePost = DateTime.UtcNow;
-			context.Comentarios.Add(comentario);
+			comentario.UsuarioId = usuario.Id;
+			context.Add(comentario);
 			await context.SaveChangesAsync();
-			var comentarioResponse = mapper.Map<ComentarioResponse>(comentario);
-			return CreatedAtAction(nameof(GetById), new { id = comentario.Id,libroId }, comentarioResponse);
+
+			var comentarioDTO = mapper.Map<ComentarioDTO>(comentario);
+
+			return CreatedAtRoute("ObtenerComentario", new { id = comentario.Id, libroId }, comentarioDTO);
 		}
 
-		// PUT api/<ComentarioController>/5
-
 		[HttpPatch("{id}")]
-
-		public async Task<ActionResult> Patch(Guid id,int libroId, JsonPatchDocument<ComentarioPatchDTO> request)
+		public async Task<ActionResult> Patch(Guid id, int libroId, JsonPatchDocument<ComentarioPatchDTO> patchDoc)
 		{
-			var comentario = await context.Comentarios.FirstOrDefaultAsync(c => c.Id == id);
+			if (patchDoc is null)
+			{
+				return BadRequest();
+			}
 
-			var existeLibro = await context.Libros.AnyAsync(l => l.Id == libroId);
-			if (!existeLibro) return NotFound();
-		
+			var existeLibro = await context.Libros.AnyAsync(x => x.Id == libroId);
 
-			var comentarioPatch = mapper.Map<ComentarioPatchDTO>(comentario);
+			if (!existeLibro)
+			{
+				return NotFound();
+			}
 
-			request.ApplyTo(comentarioPatch, ModelState);
+			var usuario = await serviciosUsuarios.ObtenerUsuario();
 
-			var isValid = TryValidateModel(comentarioPatch);
+			if (usuario is null)
+			{
+				return NotFound();
+			}
 
-			if (!isValid) return ValidationProblem(ModelState);
 
-			mapper.Map(comentarioPatch, comentario);
+			var comentarioDB = await context.Comentarios.FirstOrDefaultAsync(x => x.Id == id);
 
-			// Mapster actualiza propiedades
+			if (comentarioDB is null)
+			{
+				return NotFound();
+			}
+
+			if (comentarioDB.UsuarioId != usuario.Id)
+			{
+				return Forbid();
+			}
+
+			var comentarioPatchDTO = mapper.Map<ComentarioPatchDTO>(comentarioDB);
+
+			patchDoc.ApplyTo(comentarioPatchDTO, ModelState);
+
+			var esValido = TryValidateModel(comentarioPatchDTO);
+
+			if (!esValido)
+			{
+				return ValidationProblem();
+			}
+
+			mapper.Map(comentarioPatchDTO, comentarioDB);
+
 			await context.SaveChangesAsync();
-
 
 			return NoContent();
 		}
 
-		// DELETE api/<ComentarioController>/5
 		[HttpDelete("{id}")]
-		public async Task<ActionResult> Delete(Guid id,int libroId)
+		public async Task<ActionResult> Delete(Guid id, int libroId)
 		{
-			var existeLibro = await context.Libros.AnyAsync(l => l.Id == libroId);
-			if (!existeLibro) return NotFound();
+			var existeLibro = await context.Libros.AnyAsync(x => x.Id == libroId);
 
-			var registroBorrados = await context.Comentarios.Where(c => c.Id == id).ExecuteDeleteAsync();
-
-			if (registroBorrados == 0)
+			if (!existeLibro)
 			{
 				return NotFound();
 			}
+
+			var usuario = await serviciosUsuarios.ObtenerUsuario();
+
+			if (usuario is null)
+			{
+				return NotFound();
+			}
+
+			var comentarioDB = await context.Comentarios.FirstOrDefaultAsync(x => x.Id == id);
+
+			if (comentarioDB is null)
+			{
+				return NotFound();
+			}
+
+			if (comentarioDB.UsuarioId != usuario.Id)
+			{
+				return Forbid();
+			}
+
+			context.Remove(comentarioDB);
+			await context.SaveChangesAsync();
 
 			return NoContent();
 		}

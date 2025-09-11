@@ -1,88 +1,72 @@
 ﻿using BibliotecaApi.DTOs;
+using BibliotecaApi.DTOs.BibliotecaAPI.DTOs;
 using BibliotecaApi.Entitys;
-using Mapster;
-using static BibliotecaApi.DTOs.ComentarioDTO;
 
-namespace BibliotecaApi.Utilidades
+using Mapster;
+
+namespace BibliotecaAPI.Utilidades
 {
 	public static class MappingConfig
 	{
 		public static void RegisterMappings(TypeAdapterConfig config)
 		{
-			// Autor → AutorResponse
-			config.NewConfig<Autor, AutorResponse>()
-				.Map(dest => dest.NombreCompleto, src => src.Name + " " + src.SurName)
-				.Map(dest => dest.Autentifacion, src => src.Autentificacion);
-				
+			// Autor → AutorDTO
+			config.NewConfig<Autor, AutorDTO>()
+				 .Map(dest => dest.NombreCompleto,
+					  src => $"{src.Name} {src.SurName}");
 
-			// AutorCreate → Autor
-			config.NewConfig<AutorCreate, Autor>();
+			// Autor → AutorConLibrosDTO
+			config.NewConfig<Autor, AutorConLibrosDTO>()
+				 .Map(dest => dest.NombreCompleto,
+					  src => $"{src.Name} {src.SurName}");
 
-			// Libro → LibroResponse
-			config.NewConfig<Libro, LibroResponse>();
+			// AutorCreacionDTO → Autor
+			config.NewConfig<AutorCreacionDTO, Autor>();
 
-			//// Libro → LibroDetailResponse
-			config.NewConfig<Libro, LibroDetailResponse>()
-				.Map(dest => dest.Autores,
-					 src => src.Autores != null
-							? src.Autores.Select(al => new AutorResponse(
-									al.Autor.Id,
-									al.Autor.Name + " " + al.Autor.SurName,
-									al.Autor.Autentificacion
-							  )).ToList()
-							: new List<AutorResponse>());
-
-			// LibroDetailResponse → Libro
-
-			config.NewConfig<LibroDetailResponse, Libro>()
-				.Map(dest => dest.Autores,
-					 src => src.Autores.Select(a => new AutorLibro
-					 {
-						 AutorId = a.Id,
-						 LibroId = src.Id,
-						 Autor = new Autor
-						 {
-							 Id = a.Id,
-							 Name = string.Empty,      // requerido
-							 SurName = string.Empty    // requerido
-						 }
-					 }).ToList())
-				.AfterMapping((src, dest) =>
-				{
-					foreach (var autorLibro in dest.Autores)
-					{
-						var autorDto = src.Autores.First(a => a.Id == autorLibro.AutorId);
-						if (!string.IsNullOrWhiteSpace(autorDto.NombreCompleto))
-						{
-							var partes = autorDto.NombreCompleto.Split(" ", 2, StringSplitOptions.RemoveEmptyEntries);
-							autorLibro.Autor.Name = partes.Length > 0 ? partes[0] : string.Empty;
-							autorLibro.Autor.SurName = partes.Length > 1 ? partes[1] : string.Empty;
-						}
-					}
-				});
-
-
-
-
-			// LibroCreate → Libro
-			config.NewConfig<LibroCreate, Libro>();
-
-			// LibroUpdate → Libro
-			config.NewConfig<LibroUpdate, Libro>();
-
-
-			// Autor → AutorPatchDTO
+			// Autor <-> AutorPatchDTO (bidireccional)
 			config.NewConfig<Autor, AutorPatchDTO>();
-
-			//AutorPatchDTO → Autor
 			config.NewConfig<AutorPatchDTO, Autor>();
 
+			// AutorLibro → LibroDTO
+			config.NewConfig<AutorLibro, LibroDTO>()
+				 .Map(dest => dest.Id, src => src.LibroId)
+				 .Map(dest => dest.Titulo, src => src.Libro!.Titulo);
 
-			config.NewConfig<ComentarioResponse, Comentario>();
+			// Libro → LibroDTO
+			config.NewConfig<Libro, LibroDTO>();
 
+			// LibroCreacionDTO → Libro (incluye relación con Autores)
+			config.NewConfig<LibroCreacionDTO, Libro>()
+				 .Map(dest => dest.Autores,
+					  src => src.AutoresIds.Select(id => new AutorLibro { AutorId = id }));
 
-			config.NewConfig<Comentario, ComentarioResponse>();
+			// Libro → LibroConAutoresDTO
+			config.NewConfig<Libro, LibroConAutoresDTO>();
+
+			// AutorLibro → AutorDTO
+			config.NewConfig<AutorLibro, AutorDTO>()
+				 .Map(dest => dest.Id, src => src.AutorId)
+				 .Map(dest => dest.NombreCompleto,
+					  src => $"{src.Autor!.Name} {src.Autor!.SurName}");
+
+			// LibroCreacionDTO → AutorLibro
+			config.NewConfig<LibroCreacionDTO, AutorLibro>()
+				 .Map(dest => dest.Libro,
+					  src => new Libro { Titulo = src.Titulo });
+
+			// ComentarioCreacionDTO → Comentario
+			config.NewConfig<ComentarioCreacionDTO, Comentario>();
+
+			// Comentario → ComentarioDTO
+			config.NewConfig<Comentario, ComentarioDTO>()
+				 .Map(dest => dest.UsuarioEmail, src => src.Usuario!.Email);
+
+			// ComentarioPatchDTO <-> Comentario
+			config.NewConfig<ComentarioPatchDTO, Comentario>();
+			config.NewConfig<Comentario, ComentarioPatchDTO>();
+
+			// Usuario → UsuarioDTO
+			config.NewConfig<Usuario, UsuarioDTO>();
 		}
 	}
-
 }

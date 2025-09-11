@@ -1,34 +1,65 @@
-﻿using BibliotecaApi.DTOs;
+﻿
+using BibliotecaApi.Datos;
+using BibliotecaApi.DTOs;
+using BibliotecaApi.Entitys;
+using BibliotecaApi.Servicios;
+
+using MapsterMapper;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using System.Text;
 
-namespace BibliotecaApi.Controllers
+namespace BibliotecaAPI.Controllers
 {
 	[ApiController]
 	[Route("api/usuarios")]
-	[Authorize]
-	public class UsuarioControler : ControllerBase
+	public class UsuariosController : ControllerBase
 	{
-		private readonly UserManager<IdentityUser> userManager;
+		private readonly UserManager<Usuario> userManager;
 		private readonly IConfiguration configuration;
-		private readonly SignInManager<IdentityUser> signInManager;
+		private readonly SignInManager<Usuario> signInManager;
+		private readonly IServiciosUsuarios serviciosUsuarios;
+		private readonly ApplicationDbContext context;
+		private readonly IMapper mapper;
 
-		public UsuarioControler(UserManager<IdentityUser> userManager, IConfiguration configuration, SignInManager<IdentityUser> signInManager)
+		public UsuariosController(UserManager<Usuario> userManager, IConfiguration configuration,
+			SignInManager<Usuario> signInManager, IServiciosUsuarios serviciosUsuarios,
+			ApplicationDbContext context, IMapper mapper)
 		{
 			this.userManager = userManager;
 			this.configuration = configuration;
 			this.signInManager = signInManager;
+			this.serviciosUsuarios = serviciosUsuarios;
+			this.context = context;
+			this.mapper = mapper;
 		}
 
+		[HttpGet]
+		[Authorize(Policy = "esadmin")]
+		public async Task<IEnumerable<UsuarioDTO>> Get()
+		{
+			var usuarios = await context.Users.ToListAsync();
+			var usuariosDTO = mapper.Map<IEnumerable<UsuarioDTO>>(usuarios);
+			return usuariosDTO;
+		}
 
 		[HttpPost("registro")]
-		[AllowAnonymous]
-		public async Task<ActionResult<RepuestaAutenticacionDTO>> Registro(CredencialesUsuarioDTO credencialesUsuarioDTO)
+		public async Task<ActionResult<RespuestaAutenticacionDTO>> Registrar(
+			CredencialesUsuarioDTO credencialesUsuarioDTO)
 		{
-			var usuario = new IdentityUser { UserName = credencialesUsuarioDTO.Email, Email = credencialesUsuarioDTO.Email };
-			var resultado = await userManager.CreateAsync(usuario, credencialesUsuarioDTO.Password);
+			var usuario = new Usuario
+			{
+				UserName = credencialesUsuarioDTO.Email,
+				Email = credencialesUsuarioDTO.Email
+			};
+
+			var resultado = await userManager.CreateAsync(usuario, credencialesUsuarioDTO.Password!);
+
 			if (resultado.Succeeded)
 			{
 				var respuestaAutenticacion = await ConstruirToken(credencialesUsuarioDTO);
@@ -36,55 +67,138 @@ namespace BibliotecaApi.Controllers
 			}
 			else
 			{
-				return BadRequest(resultado.Errors);
+				foreach (var error in resultado.Errors)
+				{
+					ModelState.AddModelError(string.Empty, error.Description);
+				}
+
+				return ValidationProblem();
 			}
 		}
 
 		[HttpPost("login")]
-		[AllowAnonymous]
-		public async Task<ActionResult<RepuestaAutenticacionDTO>> Login(CredencialesUsuarioDTO credencialesUsuarioDTO)
+		public async Task<ActionResult<RespuestaAutenticacionDTO>> Login(
+			CredencialesUsuarioDTO credencialesUsuarioDTO)
 		{
 			var usuario = await userManager.FindByEmailAsync(credencialesUsuarioDTO.Email);
-			if (usuario != null)
+
+			if (usuario is null)
 			{
-				var resultado = await signInManager.CheckPasswordSignInAsync(usuario, credencialesUsuarioDTO.Password!,lockoutOnFailure: false);
-				if (resultado.Succeeded)
-				{
-					return await ConstruirToken(credencialesUsuarioDTO);
-				}
+				return RetornarLoginIncorrecto();
 			}
-			return Unauthorized();
+
+			var resultado = await signInManager.CheckPasswordSignInAsync(usuario,
+				credencialesUsuarioDTO.Password!, lockoutOnFailure: false);
+
+			if (resultado.Succeeded)
+			{
+				return await ConstruirToken(credencialesUsuarioDTO);
+			}
+			else
+			{
+				return RetornarLoginIncorrecto();
+			}
 		}
 
-		private async Task<RepuestaAutenticacionDTO> ConstruirToken(CredencialesUsuarioDTO credencialesUsuarioDTO)
+		[HttpPut]
+		[Authorize]
+		public async Task<ActionResult> Put(ActualizarUsuarioDTO actualizarUsuarioDTO)
 		{
-			var claims = new List<System.Security.Claims.Claim>
+			var usuario = await serviciosUsuarios.ObtenerUsuario();
+
+			if (usuario is null)
 			{
-				new System.Security.Claims.Claim("email", credencialesUsuarioDTO.Email),
-				new System.Security.Claims.Claim("lo que quieras","Cualquier valor")
+				return NotFound();
+			}
+
+			usuario.FechaNacimiento = actualizarUsuarioDTO.FechaNacimiento;
+
+			await userManager.UpdateAsync(usuario);
+			return NoContent();
+		}
+
+		[HttpGet("renovar-token")]
+		[Authorize]
+		public async Task<ActionResult<RespuestaAutenticacionDTO>> RenovarToken()
+		{
+			var usuario = await serviciosUsuarios.ObtenerUsuario();
+
+			if (usuario is null)
+			{
+				return NotFound();
+			}
+
+			var credencialesUsuarioDTO = new CredencialesUsuarioDTO { Email = usuario.Email! };
+
+			var respuestaAutenticacion = await ConstruirToken(credencialesUsuarioDTO);
+			return respuestaAutenticacion;
+		}
+
+		[HttpPost("hacer-admin")]
+		[Authorize(Policy = "esadmin")]
+		public async Task<ActionResult> HacerAdmin(EditarClaimDTO editarClaimDTO)
+		{
+			var usuario = await userManager.FindByEmailAsync(editarClaimDTO.Email);
+
+			if (usuario is null)
+			{
+				return NotFound();
+			}
+
+			await userManager.AddClaimAsync(usuario, new Claim("esadmin", "true"));
+			return NoContent();
+		}
+
+		[HttpPost("remover-admin")]
+		[Authorize(Policy = "esadmin")]
+		public async Task<ActionResult> RemoverAdmin(EditarClaimDTO editarClaimDTO)
+		{
+			var usuario = await userManager.FindByEmailAsync(editarClaimDTO.Email);
+
+			if (usuario is null)
+			{
+				return NotFound();
+			}
+
+			await userManager.RemoveClaimAsync(usuario, new Claim("esadmin", "true"));
+			return NoContent();
+		}
+
+		private ActionResult RetornarLoginIncorrecto()
+		{
+			ModelState.AddModelError(string.Empty, "Login incorrecto");
+			return ValidationProblem();
+		}
+
+		private async Task<RespuestaAutenticacionDTO> ConstruirToken(
+			CredencialesUsuarioDTO credencialesUsuarioDTO)
+		{
+			var claims = new List<Claim>
+			{
+				new Claim("email", credencialesUsuarioDTO.Email),
+				new Claim("lo que yo quiera", "cualquier valor")
 			};
 
-			var usuario =  await userManager.FindByEmailAsync(credencialesUsuarioDTO.Email);
+			var usuario = await userManager.FindByEmailAsync(credencialesUsuarioDTO.Email);
 			var claimsDB = await userManager.GetClaimsAsync(usuario!);
+
 			claims.AddRange(claimsDB);
 
-			var llave = new SymmetricSecurityKey(System.Text.Encoding.UTF8.GetBytes(configuration["Jwtkey"]!));
-			var creds = new SigningCredentials(llave, SecurityAlgorithms.HmacSha256);
+			var llave = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(configuration["Jwtkey"]!));
+			var credenciales = new SigningCredentials(llave, SecurityAlgorithms.HmacSha256);
+
 			var expiracion = DateTime.UtcNow.AddYears(1);
 
-			var securityToken = new System.IdentityModel.Tokens.Jwt.JwtSecurityToken(
-				claims: claims,
-				expires: expiracion,
-				signingCredentials: creds);
+			var tokenDeSeguridad = new JwtSecurityToken(issuer: null, audience: null,
+				claims: claims, expires: expiracion, signingCredentials: credenciales);
 
-			var tokenHandler = new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler().WriteToken(securityToken);
+			var token = new JwtSecurityTokenHandler().WriteToken(tokenDeSeguridad);
 
-			return new RepuestaAutenticacionDTO
+			return new RespuestaAutenticacionDTO
 			{
-				Token = tokenHandler,
+				Token = token,
 				Expiracion = expiracion
 			};
 		}
-
 	}
 }

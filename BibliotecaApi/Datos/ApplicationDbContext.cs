@@ -4,9 +4,11 @@ using Microsoft.EntityFrameworkCore;
 
 namespace BibliotecaApi.Datos
 {
-	public class ApplicationDbContext : IdentityDbContext
+	public class ApplicationDbContext : IdentityDbContext<Usuario>
 	{
 		public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)	: base(options) { }
+
+
 
 
 		public DbSet<Autor> Autores { get; set; }
